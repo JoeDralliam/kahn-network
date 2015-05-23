@@ -34,15 +34,11 @@ struct
       let rec next l =
 	match l with
 	| [] -> ()
-	| [x] -> x ()
 	| x :: t ->
 	   begin
-	     let id = Unix.fork () in
-	     if id = 0
-	     then (x () ; exit 0)
-	     else (next t ; Unix.wait () |> ignore)
+	     let th = Thread.create x () in
+	     (next t; Thread.join th)
 	   end
       in next l)
-
   let run f = f ()
 end
