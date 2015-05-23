@@ -154,7 +154,7 @@ struct
 	K.get v
 	>>= (fun x -> return (x :: acc))
 	>>= get (succ i)
-      else return acc
+      else return (List.rev acc)
     in
     get 0 []
       
