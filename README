@@ -1,0 +1,59 @@
+
+Implémentations
+===============
+
+Cinq implémentations des réseau de Kahn sont fournies :
+* _sequentiel_ qui simule la concurrence par des continuations.
+* _pipes_ qui utilise des processus lourd (fork) et des pipes.
+* _pipes-thread_ qui utilise des processus léger (thread) et des pipes.
+* _network_ qui utilise des processus lourd (fork) et des sockets.
+* _network-thread_ qui utilise des processus léger (thread) et des sockets.
+
+L'implémentation de référence (Kahn.Th) est désigné par _thread_ .
+
+Applications
+============
+
+mapReduce : une implémentation du map-reduce se basant sur l'interface de functory (foncteur _MapReduce.Base_), ainsi qu'un compteur de mots l'utilisant. Chaque travailleur est un Kahn.process.
+
+pictureInPicture : une implémentation "à la chaine" du picture-in-picture.
+
+Arguments communs:
+    * -network _impl_ : utilise l'implémentation _impl_ des réseaux de Kahn
+    * -silent : n'affiche rien
+
+Arguments spécifiques à mapReduce :
+    * -workers _n_ : spécifie les nombres de travailleurs (au sens de functory) à utiliser.
+    * -file _filename_ : fichier où aller chercher les mots
+
+Arguments spécifiques à pictureInPicture :
+    * -big _img_ : spécifie la grande image. Egalement utilisé pour pip_n
+    * -small _img_ : spécifie la petite image.
+    * -recursivity _n_ : spécifie le nombre de niveau de récursivité dans pip_n.
+
+
+Comparaison sur mapReduce.native
+================================
+
+A titre indicatif, sur une machine à quatre coeurs :
+
+----------------------------------------------------------------------------------
+|        workers |   1   |   3   |   5   |  10   |  20   |  50   |  100  |  200  |
+----------------------------------------------------------------------------------
+| implementation |       |       |       |       |       |       |       |       |
+----------------------------------------------------------------------------------
+| sequentiel     | 1.10s | 1.21s | 1.50s | 2.13s | 3.40s | 7.14s | 13.7s | 26.5s |
+----------------------------------------------------------------------------------
+| pipes          | 3.47s | 1.99s | 1.67s | 1.80s | 1.95s | 2.11s | 2.16s | 2.18s |
+----------------------------------------------------------------------------------
+| pipes-thread   | 3.44s | 3.45s | 3.59s | 3.67s | 3.67s | 3.55s | 3.68s | 3.69s |
+----------------------------------------------------------------------------------
+| thread         | 3.41s | 9.53s | 17.7s |  (1)  |  (1)  |  (1)  |  (1)  |  (1)  |
+----------------------------------------------------------------------------------
+| network        | 6.47s | 3.49s | 3.20s | 3.18s | 3.43s | 3.65s | 4.10s |  (2)  |
+----------------------------------------------------------------------------------
+| network-thread | 6.42s | 4.82s | 4.49s | 4.32s | 4.49s | 4.42s | 4.48s |  (2)  |
+----------------------------------------------------------------------------------
+
+(1) : L'exécution a dépassé le temps limite de 30 secondes.
+(2) : Le processus a essayé d'ouvrir trop de sockets.
