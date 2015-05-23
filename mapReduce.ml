@@ -1,5 +1,5 @@
 
-
+(* Naive implemntation :
 module Base (K : Kahn.S) =
 struct
   let (>>=) = K.bind
@@ -7,8 +7,6 @@ struct
   let new_worker worker v oc =
     K.return v
     >>= (fun v -> K.put (worker v) oc)
-
-  let num_workers = 8
 
   let compute worker master init =
     let rec process values =
@@ -30,13 +28,14 @@ struct
 	 >>= (fun () -> receive_values others)
     in K.run (process init)
 end
+*)
 
-
-module Base' (K : Kahn.S) :
+module type BASE_TYPE =
 sig
-  val compute : ('a -> 'b) -> ('c * 'a -> 'b -> ('c * 'a) list) -> ('c * 'a) list -> unit
-end
-  =
+  val compute : num_workers:int -> ('a -> 'b) -> (('c * 'a) -> 'b -> ('c * 'a) list) -> ('c * 'a) list -> unit
+end  
+
+module Base (K : Kahn.S) : BASE_TYPE =
 struct
   let (>>=) = K.bind
 
@@ -55,9 +54,7 @@ struct
       >>= (do_job worker oc impl)
     in impl ()
 
-  let num_workers = 8
-
-  let compute worker master init =
+  let compute ~num_workers worker master init =
     let channels = Array.init num_workers (fun _ ->
       let (recv_init, send_init) = K.new_channel () in
       let (recv_inter, send_inter) = K.new_channel () in
@@ -70,6 +67,7 @@ struct
 
     let ongoing = Array.init num_workers (fun _ -> None) in
 
+    (* Envoie les taches aux workers *)
     let rec process wcounter values =
       match values with
       | [] -> receive_values 0 []
@@ -90,6 +88,7 @@ struct
 	     end
 	   else receive_values 0 values
 	 in impl wcounter
+    (* Recoit les résultat des calculs des worker ; effectue master *)
     and receive_values i l =
       if i < num_workers
       then
@@ -106,6 +105,7 @@ struct
 	if l = []
 	then terminate ()
 	else process 0 l
+    (* Stoppe tous les workers, puis quitte *)
     and terminate () =
       Array.fold_left
 	(fun process (_, (sc, _)) ->
@@ -114,20 +114,21 @@ struct
 	) (K.return ()) channels
     in
     let workers = Array.map fst channels |> Array.to_list in
-    K.run (K.doco (process 0 init :: workers))
+
+    (* Le seul processus garanti de rester vivant est le dernier *) 
+    K.run (K.doco (workers @ [process 0 init]))
 
 end
 
 
-module B = Base' (Pipes.I)
 
-module MapReduce =
+module MapReduce (B : BASE_TYPE) =
 struct
   type ('a, 'b) t =
     | Map of 'a
     | Red of 'b
 
-  let map_reduce map reduce init default =
+  let map_reduce ~num_workers map reduce init default =
 
     let reduced = Hashtbl.create (List.length init) in
 
@@ -164,13 +165,16 @@ struct
 
     let init = List.map (fun (k, v) -> (Map k, Map v)) init in
 
-    B.compute worker master init ;
+    B.compute ~num_workers worker master init ;
     reduced
 end
 
 
-let count_word_length words =
-  MapReduce.map_reduce
+let count_word_length kahn num_workers words =
+  let module K = (val kahn : Kahn.S) in
+  let module B = Base (K) in
+  let module M = MapReduce (B) in
+  M.map_reduce ~num_workers
     (fun w -> [String.length w, 1]) (+)
     (List.map (fun w -> ((), w)) words) 0
 
@@ -183,17 +187,50 @@ let words f =
     else read (w :: acc)
   in read []
 
-let _ =
-  let text = words "/usr/share/dict/words" in
-  let distrib = count_word_length text in
-  let distrib =
-    Hashtbl.fold (fun wl count acc -> (count, wl) :: acc) distrib []
-    |> List.sort compare
-  in
-  List.iter (fun (count, wl) ->
-    Printf.printf "%7d words have length %2d\n" count wl
-  ) distrib
+let kahn_networks =
+  ["sequentiel"    , (module Sequentiel.I : Kahn.S) ;
+   "pipes"         , (module Pipes.I : Kahn.S) ;
+   "network"       , (module Network.I : Kahn.S) ;
+   "thread"        , (module Kahn.Th : Kahn.S) ;
+   "pipes-thread"  , (module PipesThread.I : Kahn.S) ;
+   "network-thread", (module NetworkThread.I : Kahn.S)]
 
+let kahn_names = List.split kahn_networks |> fst
+
+let set_kahn k n =
+  k := List.assoc n kahn_networks
+    
+let _ =
+  let kahn = ref (module Pipes.I : Kahn.S) in
+  let num_workers = ref 50 in
+  let silent = ref false in
+  let file = ref "/usr/share/dict/words" in
+  Arg.(parse
+	 ["-workers", Set_int num_workers, "Numvber of workers" ;
+	  "-silent", Set silent, "Don't display computation results" ;
+	  "-network", Symbol (kahn_names, set_kahn kahn), "Implementation to use" ;
+	  "-file", Set_string file, "File to count the words from"
+	 ]
+	 
+	 (fun _ -> ()) "") ;
+  
+  let text = words !file in
+  let distrib = count_word_length !kahn !num_workers text in
+  if not !silent
+  then
+    let distrib =
+      Hashtbl.fold (fun wl count acc -> (count, wl) :: acc) distrib []
+	 |> List.sort compare
+    in
+    List.iter (fun (count, wl) ->
+      Printf.printf "%7d words have length %2d\n" count wl
+    ) distrib
+
+
+      
+(* Multiplication matricielle à l'aide de l'interface en style functory *)
+module B = Base (Sequentiel.I)
+
 
 module MatrixMultiplication =
 struct
@@ -227,7 +264,7 @@ struct
 
     let master ((i, j), _) r = c.(i).(j) <- r ; [] in
 
-    B.compute worker master tasks ;
+    B.compute ~num_workers:8 worker master tasks ;
     c
 
 end

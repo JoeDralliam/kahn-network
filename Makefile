@@ -1,15 +1,18 @@
 OCAMLBUILD=ocamlbuild -classic-display \
-		-tags annot,debug,thread \
-		-libs unix
+		-tags annot,thread \
+		-libs unix,graphics
 TARGET=native
 
-all:mapReduce example
+all:mapReduce example pictureInPicture
 
 mapReduce:
-	$(OCAMLBUILD) mapReduce.$(TARGET)
+	$(OCAMLBUILD) $@.$(TARGET)
 
 example:
-	$(OCAMLBUILD) example.$(TARGET)
+	$(OCAMLBUILD) $@.$(TARGET)
+
+pictureInPicture:
+	$(OCAMLBUILD) $@.$(TARGET)
 
 
 clean:
