@@ -230,7 +230,7 @@ let _ =
       
 (* Multiplication matricielle à l'aide de l'interface en style functory *)
 module B = Base (Sequentiel.I)
-
+
 
 module MatrixMultiplication =
 struct
