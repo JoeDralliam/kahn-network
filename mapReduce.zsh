@@ -5,6 +5,6 @@ do
     for x in "sequentiel" "pipes" "pipes-thread" "thread" "network" "network-thread"
     do
 	printf "$x:" ;
-	time timeout 30 ./mapReduce.native -workers $w -silent -network $x;
+	time timeout 30 ./mapReduce.native -hard -workers $w -silent -network $x;
     done
 done

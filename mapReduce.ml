@@ -121,7 +121,6 @@ struct
 end
 
 
-
 module MapReduce (B : BASE_TYPE) =
 struct
   type ('a, 'b) t =
@@ -170,12 +169,34 @@ struct
 end
 
 
-let count_word_length kahn num_workers words =
+let greatest_prime_divisor s =
+  let n = ref 0 in
+  String.iter (fun x -> n := !n + Char.code x) s ;
+  let n = !n in
+  let crible = Array.make (n + 1) true in
+  let div = ref 0 in
+  for i = 2 to n
+  do
+    if crible.(i)
+    then
+      begin
+	let rec mark k =
+	  if i * k <= n
+	  then (crible.(k) <- false ; mark (succ k))
+	in mark 2 ;
+	if n mod i = 0
+	then div := i
+      end		
+  done ;
+  !div
+  
+let count_word_length hard kahn num_workers words =
   let module K = (val kahn : Kahn.S) in
   let module B = Base (K) in
   let module M = MapReduce (B) in
+  let work = if hard then greatest_prime_divisor else String.length in
   M.map_reduce ~num_workers
-    (fun w -> [String.length w, 1]) (+)
+    (fun w -> [work w, 1]) (+)
     (List.map (fun w -> ((), w)) words) 0
 
 let words f =
@@ -205,17 +226,19 @@ let _ =
   let num_workers = ref 50 in
   let silent = ref false in
   let file = ref "/usr/share/dict/words" in
+  let hard = ref false in
   Arg.(parse
 	 ["-workers", Set_int num_workers, "Numvber of workers" ;
 	  "-silent", Set silent, "Don't display computation results" ;
 	  "-network", Symbol (kahn_names, set_kahn kahn), "Implementation to use" ;
-	  "-file", Set_string file, "File to count the words from"
+	  "-file", Set_string file, "File to count the words from" ;
+	  "-hard", Set hard, "Complex computation"
 	 ]
 	 
 	 (fun _ -> ()) "") ;
   
   let text = words !file in
-  let distrib = count_word_length !kahn !num_workers text in
+  let distrib = count_word_length !hard !kahn !num_workers text in
   if not !silent
   then
     let distrib =
